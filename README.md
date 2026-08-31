@@ -6,19 +6,19 @@
 
 ### Главная страница (desktop)
 
-<img src="screenshots/main-page-desktop.png" alt="Главная страница: заголовок, краткое описание, ссылка на страницу вывода средств" width="300" />
+<img src="https://cdn.jsdelivr.net/gh/ramach05/Withdraw-react-typescript-next-zustand-vitest-playwright-vite@main/screenshots/main-page-desktop.png" alt="Главная страница: заголовок, краткое описание, ссылка на страницу вывода средств" width="300" />
 
 ### Страница вывода (desktop)
 
-<img src="screenshots/withdraw-page-desktop.png" alt="Страница вывода: форма с полями сумма, получатель, чекбоксы подтверждения и симуляции ошибки, кнопка «Отправить»" width="300" />
+<img src="https://cdn.jsdelivr.net/gh/ramach05/Withdraw-react-typescript-next-zustand-vitest-playwright-vite@main/screenshots/withdraw-page-desktop.png" alt="Страница вывода: форма с полями сумма, получатель, чекбоксы подтверждения и симуляции ошибки, кнопка «Отправить»" width="300" />
 
 ### Успешная заявка (мобильная)
 
-<img src="screenshots/correct-request-mobile.png" alt="Мобильный вид: блок «Заявка создана» с id, суммой, получателем, статусом и кнопкой «Новая заявка»" width="250" />
+<img src="https://cdn.jsdelivr.net/gh/ramach05/Withdraw-react-typescript-next-zustand-vitest-playwright-vite@main/screenshots/correct-request-mobile.png" alt="Мобильный вид: блок «Заявка создана» с id, суммой, получателем, статусом и кнопкой «Новая заявка»" width="250" />
 
 ### Ошибка запроса (мобильная)
 
-<img src="screenshots/error-request-mobile.png" alt="Мобильный вид: сообщение об ошибке запроса, форма остаётся заполненной" width="250" />
+<img src="https://cdn.jsdelivr.net/gh/ramach05/Withdraw-react-typescript-next-zustand-vitest-playwright-vite@main/screenshots/error-request-mobile.png" alt="Мобильный вид: сообщение об ошибке запроса, форма остаётся заполненной" width="250" />
 
 ## Стек
 
