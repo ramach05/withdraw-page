@@ -1,177 +1,129 @@
-# Withdraw
+# Withdraw Page
 
-Страница вывода средств: форма (сумма, получатель, подтверждение), отправка заявки в `API` с идемпотентным ключом, обработка ошибок (`409` и др.), `retry` при сетевой ошибке и при `5xx` без потери введённых данных, `AbortController` для отмены при уходе со страницы, защита от двойной отправки.
+🇬🇧 **English** | [🇷🇺 Русский](README.ru.md)
 
-## Скриншоты
+[![CI](https://github.com/ramach05/withdraw-page/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ramach05/withdraw-page/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-13%20Vitest%20%2B%201%20Playwright-brightgreen)](#testing)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-### Главная страница (desktop)
+A money-withdrawal form built around its failure modes: every `POST` carries a
+UUID `Idempotency-Key`, network errors and 5xx retry up to 3 times without
+losing the entered data, `409` surfaces the server message, an in-flight
+request is aborted on unmount, and a double click never sends twice.
 
-<img src="https://cdn.jsdelivr.net/gh/ramach05/Withdraw-react-typescript-next-zustand-vitest-playwright-vite@main/screenshots/main-page-desktop.png" alt="Главная страница: заголовок, краткое описание, ссылка на страницу вывода средств" width="300" />
+## Screens
 
-### Страница вывода (desktop)
+| Landing (desktop) | Withdrawal form (desktop) |
+| --- | --- |
+| <img src="screenshots/main-page-desktop.png" alt="Landing page" width="320" /> | <img src="screenshots/withdraw-page-desktop.png" alt="Withdrawal form" width="320" /> |
 
-<img src="https://cdn.jsdelivr.net/gh/ramach05/Withdraw-react-typescript-next-zustand-vitest-playwright-vite@main/screenshots/withdraw-page-desktop.png" alt="Страница вывода: форма с полями сумма, получатель, чекбоксы подтверждения и симуляции ошибки, кнопка «Отправить»" width="300" />
+| Request created (mobile) | Failed request (mobile) |
+| --- | --- |
+| <img src="screenshots/correct-request-mobile.png" alt="Created withdrawal card" width="240" /> | <img src="screenshots/error-request-mobile.png" alt="Error message, form data preserved" width="240" /> |
 
-### Успешная заявка (мобильная)
+## Highlights
 
-<img src="https://cdn.jsdelivr.net/gh/ramach05/Withdraw-react-typescript-next-zustand-vitest-playwright-vite@main/screenshots/correct-request-mobile.png" alt="Мобильный вид: блок «Заявка создана» с id, суммой, получателем, статусом и кнопкой «Новая заявка»" width="250" />
+- **Idempotent submit** — one UUID `Idempotency-Key` per logical submission;
+  a duplicate gets `409` and the server message is shown to the user.
+- **Retry policy** — up to 3 attempts with a 1 s delay on network errors and
+  5xx; no retry on other 4xx; form values survive every attempt.
+- **Cancellation** — `AbortController` cancels the request on unmount;
+  `AbortError` never touches the store.
+- **Double-submit guard** — disabled button plus a `status === 'loading'`
+  check in the handler.
+- **No tokens in localStorage** — the `Authorization` header comes from a
+  dev-only mock; httpOnly cookies or a BFF are documented as the production
+  approach.
+- **Restore after reload** — the last successful withdrawal is re-shown for
+  5 minutes (localStorage, TTL-checked and shape-checked parsing).
 
-### Ошибка запроса (мобильная)
+## States and error handling
 
-<img src="https://cdn.jsdelivr.net/gh/ramach05/Withdraw-react-typescript-next-zustand-vitest-playwright-vite@main/screenshots/error-request-mobile.png" alt="Мобильный вид: сообщение об ошибке запроса, форма остаётся заполненной" width="250" />
+UI states: `idle` → `loading` → `success` / `error`.
 
-## Стек
+| Response | Behavior |
+| --- | --- |
+| `200` | withdrawal saved to the store; success card with id, amount, recipient, status |
+| `409` | server `message` rendered, no retry |
+| other `4xx` | error rendered, no retry, form stays filled |
+| `5xx` / network error | up to 3 attempts with a 1 s delay, then error; form stays filled |
 
-- **React 19**
-- **Next.js 16** (App Router)
-- **TypeScript 5**
-- **Zustand 5**
+## Features
 
-## Требования
+- Fields: amount (> 0), recipient (required), confirmation checkbox.
+- Live validation; submit is enabled only for a valid form.
+- Submit button and fields disable while a request is in flight.
+- Semantic markup: `form`, `fieldset`, `label`; `role="status"` for success,
+  `role="alert"` for errors; text-only rendering, no `dangerouslySetInnerHTML`.
+- Rendering cost kept down: `React.memo`, `useMemo` / `useCallback`,
+  Zustand selectors with `useShallow`.
 
-- Node.js 20+
-- npm
+## API
 
-## Установка и запуск
+- `POST /api/v1/withdrawals` — headers `Content-Type: application/json`,
+  `Idempotency-Key: <uuid>`; body `{ "amount": number, "destination": string }`.
+  `200` returns the withdrawal object (`id`, `amount`, `destination`,
+  `status`, `createdAt`); `409` returns `{ "message": string }`.
+- `GET /api/v1/withdrawals/{id}` — available for follow-up loads; the app
+  renders the data it got from `POST`.
+
+Dev runs against Next.js API Route mocks in
+[src/app/api/v1/withdrawals/](src/app/api/v1/withdrawals/). Set
+`NEXT_PUBLIC_API_BASE` to point the client at a real backend.
+
+## Structure
+
+```
+├── src/
+│   ├── app/                    # routes + API mock (App Router)
+│   ├── api/                    # API_BASE, auth headers, withdrawalsApi with retry
+│   ├── store/                  # Zustand: form, status, lastWithdrawal, error
+│   ├── components/             # WithdrawForm
+│   ├── hooks/                  # useWithdrawSubmit
+│   ├── types/                  # withdrawal types
+│   └── utils/                  # idempotency key, validation, localStorage TTL
+└── __tests__/
+    ├── unit/                   # Vitest + Testing Library
+    └── e2e/                    # Playwright
+```
+
+## Testing
+
+13 unit tests (Vitest + Testing Library): happy path with the idempotency
+header asserted, `500` → 3 retries → error with data preserved, two clicks →
+one `POST`, empty-form and non-positive-amount validation, `409` message
+rendering, loading state, restore from localStorage, storage TTL and
+malformed-JSON handling.
+
+1 E2E test (Playwright, Chromium): fill the form, submit, assert the success
+card. Run with `npm run test:e2e`; first run needs
+`npx playwright install chromium`.
+
+## Quick start
+
+Node.js 20+.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Откройте [http://localhost:3000/](http://localhost:3000/).
+Open [http://localhost:3000/](http://localhost:3000/).
 
-Для первого запуска E2E-тестов установите браузер: `npx playwright install chromium`.
+| Script | Description |
+| --- | --- |
+| `npm run dev` | dev server |
+| `npm run build` | production build |
+| `npm run start` | serve the build |
+| `npm run lint` | ESLint |
+| `npm test` | unit tests (Vitest) |
+| `npm run test:e2e` | E2E tests (Playwright) |
+| `npm run test:watch` | Vitest in watch mode |
 
-## Скрипты
+## Stack
 
-| Команда              | Описание                      |
-| -------------------- | ----------------------------- |
-| `npm run dev`        | Режим разработки с hot reload |
-| `npm run build`      | Production-сборка             |
-| `npm run start`      | Запуск собранного приложения  |
-| `npm run lint`       | Проверка кода (ESLint)        |
-| `npm run test`       | Запуск тестов (Vitest)        |
-| `npm run test:e2e`   | E2E-тесты (Playwright)        |
-| `npm run test:watch` | Тесты в режиме watch          |
+**React 19** · **Next.js 16** (App Router) · **TypeScript 5** · **Zustand 5**
 
-## Функциональность приложения
+## License
 
-### Форма вывода
-
-- Поля: **Сумма** (число > 0), **Получатель** (обязательная строка), чекбокс **Подтверждаю вывод средств**.
-- Валидация в реальном времени; кнопка «Отправить» активна только при валидной форме.
-- Во время запроса кнопка и поля отключены (состояние loading), отображается «Отправка…».
-
-### Отправка заявки
-
-- При отправке формируется идемпотентный ключ (UUID), передаётся в заголовке `Idempotency-Key`.
-- Запрос: `POST /api/v1/withdrawals` с телом `{ amount, destination }`.
-- При успехе (200) в сторе сохраняется созданная заявка, отображается блок «Заявка создана» с id, суммой, получателем и статусом.
-- Защита от двойного submit: при статусе loading повторный клик не вызывает API (кнопка disabled и проверка в обработчике).
-
-### Ошибки API
-
-- **409** — показывается понятное сообщение (например «Заявка с таким ключом уже создана»).
-- **Сетевая ошибка** (не удалось выполнить запрос) — до 3 попыток с задержкой 1 с; введённые данные не сбрасываются.
-- **Ответ 5xx** (в т.ч. симулированная ошибка) — до 3 попыток с задержкой 1 с; после исчерпания попыток показывается ошибка, данные формы сохраняются.
-- **Ответы 4xx** — один запрос, сообщение об ошибке отображается, данные формы сохраняются.
-
-### Состояния UI
-
-- **idle** — форма доступна.
-- **loading** — запрос выполняется, форма и кнопка отключены.
-- **success** — отображается созданная заявка и кнопка «Новая заявка» для сброса формы.
-- **error** — отображается сообщение об ошибке, форма остаётся заполненной для повторной попытки.
-
-## Данные / API
-
-- **Создание заявки**: `POST /api/v1/withdrawals`
-  Заголовки: `Content-Type: application/json`, `Idempotency-Key: <uuid>`.
-  Тело: `{ "amount": number, "destination": string }`.
-  Ответ 200: объект заявки (id, amount, destination, status, createdAt).
-  Ответ 409: тело с полем `message` — показывается пользователю.
-
-- **Получение заявки**: `GET /api/v1/withdrawals/{id}` — в текущей реализации данные заявки берутся из ответа POST; GET доступен в API для сценариев подгрузки по id.
-
-В режиме разработки доступны мок-обработчики Next.js API Routes: [src/app/api/v1/withdrawals/route.ts](src/app/api/v1/withdrawals/route.ts) и [src/app/api/v1/withdrawals/[id]/route.ts](src/app/api/v1/withdrawals/%5Bid%5D/route.ts). Для работы с реальным бэкендом задайте `NEXT_PUBLIC_API_BASE` (например `https://api.example.com`).
-
-## Безопасность и авторизация
-
-- Access token **не хранится в localStorage**. Для мока можно задать опциональную переменную `NEXT_PUBLIC_MOCK_TOKEN` — она подставляется в заголовок `Authorization` только при запросах к API. В продакшене рекомендуется: выдача токена и хранение сессии на бэкенде, установка httpOnly cookie после входа; фронтенд не имеет доступа к токену, запросы к API идут с credentials (cookie) или через BFF.
-
-## Структура проекта
-
-```
-├── src/
-│   ├── app/
-│   │   ├── layout.tsx
-│   │   ├── page.tsx
-│   │   ├── globals.css
-│   │   ├── withdraw/
-│   │   │   └── page.tsx
-│   │   └── api/
-│   │       └── v1/
-│   │           └── withdrawals/
-│   │               ├── route.ts          # POST (мок)
-│   │               ├── mockStore.ts
-│   │               └── [id]/
-│   │                   └── route.ts      # GET (мок)
-│   ├── api/
-│   │   ├── config.ts                     # API_BASE, getAuthHeaders
-│   │   └── withdrawalsApi.ts             # createWithdrawal, getWithdrawal, retry при сети и 5xx
-│   ├── store/
-│   │   └── withdrawStore.ts              # Zustand: форма, status, lastWithdrawal, error
-│   ├── components/
-│   │   └── WithdrawForm.tsx
-│   ├── hooks/
-│   │   └── useWithdrawSubmit.ts
-│   ├── types/
-│   │   └── withdrawal.ts
-│   └── utils/
-│       ├── idempotency.ts                # generateIdempotencyKey
-│       ├── validation.ts                 # validateWithdrawForm, isWithdrawFormValid
-│       └── lastWithdrawalStorage.ts      # persist/restore последней заявки (5 мин)
-├── __tests__/
-│   ├── unit/
-│   │   ├── withdraw.test.tsx             # unit: форма, API, валидация, 409, loading, restore
-│   │   └── lastWithdrawalStorage.test.ts  # unit: persist/restore, TTL
-│   └── e2e/
-│       └── withdraw.spec.ts              # E2E: отправка формы, проверка успеха
-├── screenshots/
-│   ├── main-page-desktop.png
-│   ├── withdraw-page-desktop.png
-│   ├── correct-request-mobile.png
-│   └── error-request-mobile.png
-├── package.json
-├── next.config.ts
-├── playwright.config.ts
-├── tsconfig.json
-└── vitest.config.ts
-```
-
-## Особенности реализации
-
-- **Zustand**: единый store для полей формы, статуса (idle/loading/success/error), последней заявки и сообщения об ошибке. Защита от двойного submit: проверка `status === 'loading'` перед вызовом API и disabled кнопки.
-- **Идемпотентность**: один UUID на одну логическую отправку.
-- **Retry при сетевой ошибке и при 5xx**: до 3 попыток с задержкой 1 с; при 4xx повторов нет.
-- **AbortController**: при размонтировании компонента запрос отменяется (abort); при AbortError состояние формы не обновляется.
-- **Безопасный рендер**: вывод только текста и атрибутов, без `dangerouslySetInnerHTML`.
-- **Семантика и доступность**: форма с `<form>`, `<fieldset>`, `<label>`, блок успеха с `role="status"`, блок ошибки с `role="alert"`.
-- **Восстановление после reload**: последняя успешная заявка сохраняется в `localStorage`; при открытии страницы вывода в течение 5 минут отображается снова.
-- **Производительность**: мемоизация компонентов (`React.memo`), производных значений и колбэков (`useMemo`, `useCallback`), селекторы Zustand с `useShallow` для снижения лишних рендеров.
-
-## Тесты
-
-- **Happy path**: отправка валидной формы → мок POST 200 → проверка отображения заявки и вызова API с idempotency key.
-- **Ошибка API**: мок 500 (3 попытки retry) → проверка отображения сообщения об ошибке и сохранения введённых данных.
-- **Двойной submit**: мок «висящий» до разрешения promise → два клика по кнопке → проверка, что POST вызван один раз.
-- **Валидация (пустая форма)**: клик «Отправить» без заполнения → отображение ошибок по полям, fetch не вызывается.
-- **Валидация (сумма ≤ 0)**: сумма 0 при заполненных остальных полях → ошибка «Сумма должна быть больше нуля», fetch не вызывается.
-- **409**: мок 409 с сообщением «Заявка с таким ключом уже создана» → текст отображается в блоке с role="alert".
-- **Loading**: после клика «Отправить» кнопка переходит в состояние «Отправка…» и disabled до завершения запроса.
-- **Восстановление после reload**: при валидных данных в localStorage блок «Заявка создана» отображается без вызова API.
-- **lastWithdrawalStorage**: unit-тесты persist/restore, истёкший TTL, невалидный JSON и структура.
-- **E2E**: один сценарий Playwright: заполнение формы, отправка, проверка блока успеха. Запуск: `npm run test:e2e`.
-
-Запуск unit-тестов: `npm run test`.
+MIT
